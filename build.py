@@ -8,7 +8,7 @@ import tempfile
 import os
 
 # Global variables
-script_path = pathlib.Path(__file__).absolute().parent
+current_path = pathlib.Path(".").absolute()
 execution_datetime = datetime.datetime.now().strftime("%Y-%m-%d-T%H%M%S")
 
 # Command line options choices
@@ -18,11 +18,12 @@ cmake_generators = ["Ninja", "Unix Makefiles"]
 
 # Define comandline argument options
 arg_parser = argparse.ArgumentParser()
+# Project path options
 arg_parser.add_argument(
     "-sp", "--source-path",
-    type=pathlib.Path, default=script_path/"llvm-project/llvm",
+    type=pathlib.Path, default=current_path/"llvm-project/llvm",
     help="Path to the llvm-project source directory. " +
-         "Default: \"<path to build.y>/llvm-project\"."
+         "Default: \"$PWD/llvm-project\"."
 )
 arg_parser.add_argument(
     "-bp", "--build-path",
@@ -32,23 +33,24 @@ arg_parser.add_argument(
          "temporary folder of your operational system. If you desired to " +
          "keep the CMake build files, please provide a path through this flag."
 )
-arg_parser.add_argument(
-    "-bt", "--build-type",
-    type=str.capitalize, choices=build_type_options, default="Release",
-    help="Build type passed to the CMake system. Default: Release"
-)
 install_path_args = arg_parser.add_mutually_exclusive_group()
 install_path_args.add_argument(
     "-ip", "--install-path",
-    type=pathlib.Path, default=script_path/"llvm-install"/execution_datetime,
+    type=pathlib.Path, default=current_path/"llvm-install"/execution_datetime,
     help="Path to a directory used by CMake as the llvm install path. " +
-         "Default: \"<path to buid.y>/llvm-builds/<build-label>\"."
+         "Default: \"$PWD/llvm-builds/<build-label>\"."
 )
 install_path_args.add_argument(
     "-bl", "--install-label",
     type=str, default=None,
     help="Label to use when installing to the default install path. " +
          "Default: datetime of the execution of this script."
+)
+# Build options
+arg_parser.add_argument(
+    "-bt", "--build-type",
+    type=str.capitalize, choices=build_type_options, default="Release",
+    help="Build type passed to the CMake system. Default: Release"
 )
 arg_parser.add_argument(
     "-dc", "--disable-ccache",
@@ -79,11 +81,29 @@ arg_parser.add_argument(
     help="Linker to be used during the LLVM compilation. " +
          "Default: system default linker."
 )
+# Script stages options
+arg_parser.add_argument(
+    "-db", "--disable-build",
+    action="store_true",
+    help="Disable the script build stage."
+)
+arg_parser.add_argument(
+    "-dt", "--disable-tests",
+    action="store_true",
+    help="Disable the script test stage."
+)
+# Script options
 arg_parser.add_argument(
     "-po", "--print-only",
     action="store_true",
     help="Only print actions instead of executing them."
 )
+arg_parser.add_argument(
+    "-fo", "--force-overwrite",
+    action="store_true",
+    help="Overwrite previous build installs."
+)
+
 
 def printWarning(warning_msg: str) -> None:
     terminal_width = shutil.get_terminal_size()[0]
@@ -110,8 +130,8 @@ def runShellCommand(command: list, error_msg: str = "", print_only: bool = True)
         if returncode != 0:
             printFatalError(
                 "Executed shell command failed:\n"
-               f"Command: {' '.join(command)}\n"
-               f"Return code: {returncode}"
+                f"Command: {' '.join(command)}\n"
+                f"Return code: {returncode}"
             )
 
 
@@ -129,7 +149,7 @@ def main(args: argparse.Namespace) -> None:
         args.build_path = pathlib.Path(args.build_tmp_dir.name)
     elif args.build_path.exists and not isDirectoryEmpty(args.build_path):
         printWarning("Build path not empty and CMake build cache may be "
-                    f"used: {args.install_path}")
+                     f"used: {args.install_path}")
 
     if not args.print_only:
         args.build_path.mkdir(parents=True, exist_ok=True)
@@ -137,25 +157,27 @@ def main(args: argparse.Namespace) -> None:
     if args.install_label != None:
         args.install_path = args.install_path.parent / args.install_label
 
-    if args.install_path.exists and not isDirectoryEmpty(args.install_path):
-        printFatalError(f"Install path not empty: {args.install_path}")
+    if not args.force_overwrite and not args.disable_build:
+        if args.install_path.exists and not isDirectoryEmpty(args.install_path):
+            printFatalError(f"Install path not empty: {args.install_path}")
 
     if not args.print_only:
         args.install_path.mkdir(parents=True, exist_ok=True)
-    
+
     if not args.disable_ccache:
         args.ccache_path = shutil.which("ccache")
         if args.ccache_path == None:
-            printWarning(f"CCache enabled but not installed. Building without cache.")
+            printWarning(
+                f"CCache enabled but not installed. Building without cache.")
             args.disable_ccache = True
 
     if not args.environment_compiler:
         args.clang_path = shutil.which("clang")
         args.clangxx_path = shutil.which("clang++")
         if args.clang_path == None or args.clangxx_path == None:
-            printWarning(f"Clang not found. Building with default C/C++ compilers.")
+            printWarning(
+                f"Clang not found. Building with default C/C++ compilers.")
             args.environment_compiler = True
-
 
     args.enable_debug_messages = int(args.enable_debug_messages)
 
@@ -175,16 +197,19 @@ def main(args: argparse.Namespace) -> None:
     ]
     if not args.environment_compiler:
         cmake_config_command.append(f"-DCMAKE_C_COMPILER={args.clang_path}")
-        cmake_config_command.append(f"-DCMAKE_CXX_COMPILER={args.clangxx_path}")
+        cmake_config_command.append(
+            f"-DCMAKE_CXX_COMPILER={args.clangxx_path}")
     if not args.disable_ccache:
-        cmake_config_command.append(f"-DCMAKE_C_COMPILER_LAUNCHER={args.ccache_path}")
-        cmake_config_command.append(f"-DCMAKE_CXX_COMPILER_LAUNCHER={args.ccache_path}")
+        cmake_config_command.append(
+            f"-DCMAKE_C_COMPILER_LAUNCHER={args.ccache_path}")
+        cmake_config_command.append(
+            f"-DCMAKE_CXX_COMPILER_LAUNCHER={args.ccache_path}")
     if args.linker != None:
         cmake_config_command.append(f"-DLLVM_USE_LINKER={args.linker}")
     if args.build_type == "Debug":
         cmake_config_command.append("-DBUILD_SHARED_LIBS=1")
         cmake_config_command.append("-DLLVM_USE_SPLIT_DWARF=1")
-    
+
     cmake_build_command = [
         "cmake",
         "--build",
@@ -193,29 +218,36 @@ def main(args: argparse.Namespace) -> None:
         "install"
     ]
 
-    ninja_test_command = [
-        'ninja',
+    test_command = [
+        'ninja' if args.generator == "Ninja" else "make",
         '-C',
         f'{args.build_path}',
         'check-all'
     ]
 
-    # Compile and test llvm
+    # Scripts stages
+    # CMake configuration
     runShellCommand(
         cmake_config_command,
         "Failed to generate the build rules using the passed configurations",
         args.print_only
     )
-    runShellCommand(
-        cmake_build_command,
-        "Failed to build the LLVM project",
-        args.print_only
-    )
-    runShellCommand(
-        ninja_test_command,
-        "Failed to successfully test the LLVM project failed",
-        args.print_only
-    )
+
+    # Build
+    if not args.disable_build:
+        runShellCommand(
+            cmake_build_command,
+            "Failed to build the LLVM project",
+            args.print_only
+        )
+
+    # Test
+    if not args.disable_tests:
+        runShellCommand(
+            test_command,
+            "Failed to successfully test the LLVM project failed",
+            args.print_only
+        )
 
 
 if __name__ == "__main__":
