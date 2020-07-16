@@ -15,6 +15,42 @@ execution_datetime = datetime.datetime.now().strftime("%Y-%m-%d-T%H%M%S")
 build_type_options = ["Release", "Debug"]
 linker_option = ["lld", "gold"]
 cmake_generators = ["Ninja", "Unix Makefiles"]
+llvm_projects = [
+    "clang", 
+    "clang-tools-extra", 
+    "compiler-rt", 
+    "debuginfo-tests",
+    "libc", 
+    "libclc", 
+    "libcxx", 
+    "libcxxabi", 
+    "libunwind", 
+    "lld",
+    "lldb", 
+    "llgo", 
+    "openmp", 
+    "parallel-libs", 
+    "polly", 
+    "pstl"
+]
+llvm_targets = [
+  "AArch64",
+  "AMDGPU",
+  "ARM",
+  "BPF",
+  "Hexagon",
+  "Lanai",
+  "Mips",
+  "MSP430",
+  "NVPTX",
+  "PowerPC",
+  "RISCV",
+  "Sparc",
+  "SystemZ",
+  "WebAssembly",
+  "X86",
+  "XCore"
+]
 
 # Define comandline argument options
 arg_parser = argparse.ArgumentParser()
@@ -45,6 +81,17 @@ install_path_args.add_argument(
     type=str, default=None,
     help="Label to use when installing to the default install path. " +
          "Default: datetime of the execution of this script."
+)
+# LLVM options
+arg_parser.add_argument(
+    "-ep", "--enable-projects",
+    type=str.lower, choices=llvm_projects, default=["clang", "openmp"], nargs="+",
+    help="LLVM projects enabled during the build."
+)
+arg_parser.add_argument(
+    "-et", "--enable-targets",
+    type=str, choices=llvm_targets, default=["X86", "NVPTX"], nargs="+",
+    help="LLVM projects enabled during the build."
 )
 # Build options
 arg_parser.add_argument(
@@ -179,6 +226,9 @@ def main(args: argparse.Namespace) -> None:
                 f"Clang not found. Building with default C/C++ compilers.")
             args.environment_compiler = True
 
+    args.enable_projects = ";".join(args.enable_projects)
+    args.enable_targets = ";".join(args.enable_targets)
+
     args.enable_debug_messages = int(args.enable_debug_messages)
 
     print(f"{args}\n")
@@ -192,8 +242,8 @@ def main(args: argparse.Namespace) -> None:
         f"-DCMAKE_BUILD_TYPE={args.build_type}",
         f"-DCMAKE_INSTALL_PREFIX={args.install_path}",
         f"-DLIBOMPTARGET_ENABLE_DEBUG={args.enable_debug_messages}",
-        "-DLLVM_ENABLE_PROJECTS=clang;openmp",
-        "-DLLVM_TARGETS_TO_BUILD=X86;NVPTX"
+        f"-DLLVM_ENABLE_PROJECTS={args.enable_projects}",
+        f"-DLLVM_TARGETS_TO_BUILD={args.enable_targets}"
     ]
     if not args.environment_compiler:
         cmake_config_command.append(f"-DCMAKE_C_COMPILER={args.clang_path}")
