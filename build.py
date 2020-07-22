@@ -16,40 +16,40 @@ build_type_options = ["Release", "Debug"]
 linker_option = ["lld", "gold"]
 cmake_generators = ["Ninja", "Unix Makefiles"]
 llvm_projects = [
-    "clang", 
-    "clang-tools-extra", 
-    "compiler-rt", 
+    "clang",
+    "clang-tools-extra",
+    "compiler-rt",
     "debuginfo-tests",
-    "libc", 
-    "libclc", 
-    "libcxx", 
-    "libcxxabi", 
-    "libunwind", 
+    "libc",
+    "libclc",
+    "libcxx",
+    "libcxxabi",
+    "libunwind",
     "lld",
-    "lldb", 
-    "llgo", 
-    "openmp", 
-    "parallel-libs", 
-    "polly", 
+    "lldb",
+    "llgo",
+    "openmp",
+    "parallel-libs",
+    "polly",
     "pstl"
 ]
 llvm_targets = [
-  "AArch64",
-  "AMDGPU",
-  "ARM",
-  "BPF",
-  "Hexagon",
-  "Lanai",
-  "Mips",
-  "MSP430",
-  "NVPTX",
-  "PowerPC",
-  "RISCV",
-  "Sparc",
-  "SystemZ",
-  "WebAssembly",
-  "X86",
-  "XCore"
+    "AArch64",
+    "AMDGPU",
+    "ARM",
+    "BPF",
+    "Hexagon",
+    "Lanai",
+    "Mips",
+    "MSP430",
+    "NVPTX",
+    "PowerPC",
+    "RISCV",
+    "Sparc",
+    "SystemZ",
+    "WebAssembly",
+    "X86",
+    "XCore"
 ]
 
 # Define comandline argument options
@@ -90,7 +90,7 @@ arg_parser.add_argument(
 )
 arg_parser.add_argument(
     "-et", "--enable-targets",
-    type=str, choices=llvm_targets, default=["X86", "NVPTX"], nargs="+",
+    type=str, choices=llvm_targets, default=["X86"], nargs="+",
     help="LLVM projects enabled during the build."
 )
 # Build options
@@ -250,10 +250,7 @@ def main(args: argparse.Namespace) -> None:
         cmake_config_command.append(
             f"-DCMAKE_CXX_COMPILER={args.clangxx_path}")
     if not args.disable_ccache:
-        cmake_config_command.append(
-            f"-DCMAKE_C_COMPILER_LAUNCHER={args.ccache_path}")
-        cmake_config_command.append(
-            f"-DCMAKE_CXX_COMPILER_LAUNCHER={args.ccache_path}")
+        cmake_config_command.append(f"-DLLVM_CCACHE_BUILD=ON")
     if args.linker != None:
         cmake_config_command.append(f"-DLLVM_USE_LINKER={args.linker}")
     if args.build_type == "Debug":
