@@ -61,13 +61,17 @@ arg_parser.add_argument(
     help="Path to the llvm-project source directory. " +
          "Default: \"$PWD/llvm-project\"."
 )
-arg_parser.add_argument(
+build_path_args = arg_parser.add_mutually_exclusive_group()
+build_path_args.add_argument(
+    "-tb", "--temporary-build",
+    action="store_true",
+    help="Store CMake and build files in a temporary directory."
+)
+build_path_args.add_argument(
     "-bp", "--build-path",
-    type=pathlib.Path, default=None,
+    type=pathlib.Path, default=current_path/"llvm-build",
     help="Path to a directory used by CMake as its build path. " +
-         "By default, this script will create a temporary directory in the " +
-         "temporary folder of your operational system. If you desired to " +
-         "keep the CMake build files, please provide a path through this flag."
+         "By default, use \"$PWD/llvm-build/<build-type>\"."
 )
 install_path_args = arg_parser.add_mutually_exclusive_group()
 install_path_args.add_argument(
@@ -77,11 +81,12 @@ install_path_args.add_argument(
          "Default: \"$PWD/llvm-builds/<build-label>\"."
 )
 install_path_args.add_argument(
-    "-bl", "--install-label",
+    "-il", "--install-label",
     type=str, default=None,
     help="Label to use when installing to the default install path. " +
          "Default: datetime of the execution of this script."
 )
+
 # LLVM options
 arg_parser.add_argument(
     "-ep", "--enable-projects",
@@ -93,6 +98,7 @@ arg_parser.add_argument(
     type=str, choices=llvm_targets, default=["X86"], nargs="+",
     help="LLVM projects enabled during the build."
 )
+
 # Build options
 arg_parser.add_argument(
     "-bt", "--build-type",
@@ -113,8 +119,8 @@ arg_parser.add_argument(
     "-g", "--generator",
     type=str, choices=cmake_generators,
     default="Ninja" if shutil.which("ninja") != None else "Unix Makefiles",
-    help="Use local compilers provided by CC and CXX environment variables " +
-         "instead of clang."
+    help="Build system used as CMake generator. If installed, Ninja will be " +
+         "used by default."
 )
 arg_parser.add_argument(
     "-bs", "--environment-compiler",
@@ -128,6 +134,7 @@ arg_parser.add_argument(
     help="Linker to be used during the LLVM compilation. " +
          "Default: system default linker."
 )
+
 # Script stages options
 arg_parser.add_argument(
     "-db", "--disable-build",
@@ -139,6 +146,7 @@ arg_parser.add_argument(
     action="store_true",
     help="Disable the script test stage."
 )
+
 # Script options
 arg_parser.add_argument(
     "-po", "--print-only",
@@ -188,13 +196,16 @@ def isDirectoryEmpty(path: str) -> bool:
 
 def main(args: argparse.Namespace) -> None:
     # Preprocess arguments and create temporary and output directories
-    if not args.source_path.exists:
+    if not args.source_path.exists():
         printFatalError(f"Source path does not exists: {args.source_path}")
 
-    if args.build_path == None:
+    if args.temporary_build:
         args.build_tmp_dir = tempfile.TemporaryDirectory()
         args.build_path = pathlib.Path(args.build_tmp_dir.name)
-    elif args.build_path.exists and not isDirectoryEmpty(args.build_path):
+    
+    args.build_path /= args.build_type.lower()
+
+    if args.build_path.exists and not isDirectoryEmpty(args.build_path):
         printWarning("Build path not empty and CMake build cache may be "
                      f"used: {args.install_path}")
 
