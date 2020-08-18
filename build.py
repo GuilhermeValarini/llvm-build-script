@@ -4,7 +4,6 @@ import pathlib
 import subprocess
 import sys
 import shutil
-import tempfile
 import os
 
 # Global variables
@@ -52,49 +51,36 @@ llvm_targets = [
     "XCore"
 ]
 
-# Define comandline argument options
+# Define comandline options
 arg_parser = argparse.ArgumentParser()
+
 # Project path options
 arg_parser.add_argument(
-    "-sp", "--source-path",
-    type=pathlib.Path, default=current_path/"llvm-project/llvm",
-    help="Path to the llvm-project source directory. " +
-         "Default: \"$PWD/llvm-project\"."
+    "source_path",
+    type=pathlib.Path,
+    help="Path to the llvm project source."
 )
-build_path_args = arg_parser.add_mutually_exclusive_group()
-build_path_args.add_argument(
-    "-tb", "--temporary-build",
-    action="store_true",
-    help="Store CMake and build files in a temporary directory."
+arg_parser.add_argument(
+    "install_path",
+    type=pathlib.Path,
+    help="Path to a destination directory to install the binaries."
 )
-build_path_args.add_argument(
-    "-bp", "--build-path",
-    type=pathlib.Path, default=current_path/"llvm-build",
-    help="Path to a directory used by CMake as its build path. " +
-         "By default, use \"$PWD/llvm-build/<build-type>\"."
-)
-install_path_args = arg_parser.add_mutually_exclusive_group()
-install_path_args.add_argument(
-    "-ip", "--install-path",
-    type=pathlib.Path, default=current_path/"llvm-install"/execution_datetime,
-    help="Path to a directory used by CMake as the llvm install path. " +
-         "Default: \"$PWD/llvm-builds/<build-label>\"."
-)
-install_path_args.add_argument(
-    "-il", "--install-label",
-    type=str, default=None,
-    help="Label to use when installing to the default install path. " +
-         "Default: datetime of the execution of this script."
+arg_parser.add_argument(
+    "build_path",
+    type=pathlib.Path,
+    help="Path to a directory to be used by CMake as its build path. A new " +
+         "directory with the build type will be created inside the provided " +
+         "path."
 )
 
 # LLVM options
 arg_parser.add_argument(
-    "-ep", "--enable-projects",
+    "-ep", "--enable-projects", metavar="PROJECT",
     type=str.lower, choices=llvm_projects, default=["clang", "openmp"], nargs="+",
     help="LLVM projects enabled during the build."
 )
 arg_parser.add_argument(
-    "-et", "--enable-targets",
+    "-et", "--enable-targets", metavar="TARGET",
     type=str, choices=llvm_targets, default=["X86"], nargs="+",
     help="LLVM projects enabled during the build."
 )
@@ -196,24 +182,18 @@ def isDirectoryEmpty(path: str) -> bool:
 
 def main(args: argparse.Namespace) -> None:
     # Preprocess arguments and create temporary and output directories
+    args.source_path /= "llvm"
     if not args.source_path.exists():
         printFatalError(f"Source path does not exists: {args.source_path}")
 
-    if args.temporary_build:
-        args.build_tmp_dir = tempfile.TemporaryDirectory()
-        args.build_path = pathlib.Path(args.build_tmp_dir.name)
-    
     args.build_path /= args.build_type.lower()
 
-    if args.build_path.exists and not isDirectoryEmpty(args.build_path):
+    if args.build_path.exists() and not isDirectoryEmpty(args.build_path):
         printWarning("Build path not empty and CMake build cache may be "
-                     f"used: {args.install_path}")
+                     f"used: {args.build_path}")
 
     if not args.print_only:
         args.build_path.mkdir(parents=True, exist_ok=True)
-
-    if args.install_label != None:
-        args.install_path = args.install_path.parent / args.install_label
 
     if not args.force_overwrite and not args.disable_build:
         if args.install_path.exists and not isDirectoryEmpty(args.install_path):
