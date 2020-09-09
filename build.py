@@ -5,6 +5,7 @@ import subprocess
 import sys
 import shutil
 import os
+import git
 
 # Global variables
 current_path = pathlib.Path(".").absolute()
@@ -61,16 +62,17 @@ arg_parser.add_argument(
     help="Path to the llvm project source."
 )
 arg_parser.add_argument(
-    "install_path",
-    type=pathlib.Path,
-    help="Path to a destination directory to install the binaries."
-)
-arg_parser.add_argument(
     "build_path",
     type=pathlib.Path,
     help="Path to a directory to be used by CMake as its build path. A new " +
          "directory with the build type will be created inside the provided " +
          "path."
+)
+arg_parser.add_argument(
+    "install_path",
+    type=pathlib.Path, nargs="?",
+    help="Path to a destination directory to install the binaries. If none " +
+         "is provided, defaults to $PWD/installs/git-branch-name/build-type"
 )
 
 # LLVM options
@@ -116,7 +118,7 @@ arg_parser.add_argument(
 )
 arg_parser.add_argument(
     "-l", "--linker",
-    type=str, choices=linker_option, default=None,
+    type=str, choices=linker_option, default="lld",
     help="Linker to be used during the LLVM compilation. " +
          "Default: system default linker."
 )
@@ -182,6 +184,11 @@ def isDirectoryEmpty(path: str) -> bool:
 
 def main(args: argparse.Namespace) -> None:
     # Preprocess arguments and create temporary and output directories
+    if args.install_path == None:
+        branch_name = git.Repo(
+            args.source_path).active_branch.name.replace("/", "-")
+        args.install_path = current_path/"installs"/branch_name/args.build_type.lower()
+
     args.source_path /= "llvm"
     if not args.source_path.exists():
         printFatalError(f"Source path does not exists: {args.source_path}")
@@ -234,7 +241,8 @@ def main(args: argparse.Namespace) -> None:
         f"-DCMAKE_INSTALL_PREFIX={args.install_path}",
         f"-DLIBOMPTARGET_ENABLE_DEBUG={args.enable_debug_messages}",
         f"-DLLVM_ENABLE_PROJECTS={args.enable_projects}",
-        f"-DLLVM_TARGETS_TO_BUILD={args.enable_targets}"
+        f"-DLLVM_TARGETS_TO_BUILD={args.enable_targets}",
+        f"-DLLVM_USE_LINKER={args.linker}"
     ]
     if not args.environment_compiler:
         cmake_config_command.append(f"-DCMAKE_C_COMPILER={args.clang_path}")
@@ -242,8 +250,6 @@ def main(args: argparse.Namespace) -> None:
             f"-DCMAKE_CXX_COMPILER={args.clangxx_path}")
     if not args.disable_ccache:
         cmake_config_command.append(f"-DLLVM_CCACHE_BUILD=ON")
-    if args.linker != None:
-        cmake_config_command.append(f"-DLLVM_USE_LINKER={args.linker}")
     if args.build_type == "Debug":
         cmake_config_command.append("-DBUILD_SHARED_LIBS=1")
         cmake_config_command.append("-DLLVM_USE_SPLIT_DWARF=1")
