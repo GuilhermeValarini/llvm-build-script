@@ -12,9 +12,9 @@ current_path = pathlib.Path(".").absolute()
 execution_datetime = datetime.datetime.now().strftime("%Y-%m-%d-T%H%M%S")
 
 # Command line options choices
-build_type_options = ["Release", "Debug"]
-linker_option = ["lld", "gold"]
-cmake_generators = ["Ninja", "Unix Makefiles"]
+build_type_options = ["Release", "Debug",]
+linker_option = ["lld", "gold",]
+cmake_generators = ["Ninja", "Unix Makefiles",]
 llvm_projects = [
     "clang",
     "clang-tools-extra",
@@ -31,7 +31,7 @@ llvm_projects = [
     "openmp",
     "parallel-libs",
     "polly",
-    "pstl"
+    "pstl",
 ]
 llvm_targets = [
     "AArch64",
@@ -49,7 +49,13 @@ llvm_targets = [
     "SystemZ",
     "WebAssembly",
     "X86",
-    "XCore"
+    "XCore",
+]
+libccxx_projects = [
+    "libc",
+    "libclc",
+    "libcxx",
+    "libcxxabi",
 ]
 
 # Define comandline options
@@ -85,6 +91,11 @@ arg_parser.add_argument(
     "-et", "--enable-targets", metavar="TARGET",
     type=str, choices=llvm_targets, default=["X86"], nargs="+",
     help="LLVM projects enabled during the build."
+)
+arg_parser.add_argument(
+    "-ccxx", "--build-libcxx",
+    action="store_true",
+    help="Enable libc and libcxx projects"
 )
 
 # Build options
@@ -224,8 +235,11 @@ def main(args: argparse.Namespace) -> None:
                 f"Clang not found. Building with default C/C++ compilers.")
             args.environment_compiler = True
 
-    args.enable_projects = ";".join(args.enable_projects)
-    args.enable_targets = ";".join(args.enable_targets)
+    if args.ccxx:
+        args.enable_projects.extend(libccxx_projects)
+
+    args.enable_projects = ";".join(set(args.enable_projects))
+    args.enable_targets = ";".join(set(args.enable_targets))
 
     args.enable_debug_messages = int(args.enable_debug_messages)
 
@@ -242,7 +256,9 @@ def main(args: argparse.Namespace) -> None:
         f"-DLIBOMPTARGET_ENABLE_DEBUG={args.enable_debug_messages}",
         f"-DLLVM_ENABLE_PROJECTS={args.enable_projects}",
         f"-DLLVM_TARGETS_TO_BUILD={args.enable_targets}",
-        f"-DLLVM_USE_LINKER={args.linker}"
+        f"-DLLVM_USE_LINKER={args.linker}",
+        f"-DLLVM_ENABLE_ASSERTIONS=On",
+        f"-DCMAKE_CXX_FLAGS=-Wall"
     ]
     if not args.environment_compiler:
         cmake_config_command.append(f"-DCMAKE_C_COMPILER={args.clang_path}")
