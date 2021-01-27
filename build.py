@@ -12,9 +12,9 @@ current_path = pathlib.Path(".").absolute()
 execution_datetime = datetime.datetime.now().strftime("%Y-%m-%d-T%H%M%S")
 
 # Command line options choices
-build_type_options = ["Release", "Debug",]
-linker_option = ["lld", "gold",]
-cmake_generators = ["Ninja", "Unix Makefiles",]
+build_type_options = ["Release", "Debug", ]
+linker_option = ["lld", "gold", ]
+cmake_generators = ["Ninja", "Unix Makefiles", ]
 llvm_projects = [
     "clang",
     "clang-tools-extra",
@@ -51,12 +51,6 @@ llvm_targets = [
     "X86",
     "XCore",
 ]
-libccxx_projects = [
-    "libc",
-    "libclc",
-    "libcxx",
-    "libcxxabi",
-]
 
 # Define comandline options
 arg_parser = argparse.ArgumentParser()
@@ -84,18 +78,14 @@ arg_parser.add_argument(
 # LLVM options
 arg_parser.add_argument(
     "-ep", "--enable-projects", metavar="PROJECT",
-    type=str.lower, choices=llvm_projects, default=["clang", "openmp"], nargs="+",
+    type=str.lower, choices=llvm_projects,
+    default=["clang", "openmp", "libcxx", "libcxxabi"], nargs="+",
     help="LLVM projects enabled during the build."
 )
 arg_parser.add_argument(
     "-et", "--enable-targets", metavar="TARGET",
     type=str, choices=llvm_targets, default=["X86"], nargs="+",
     help="LLVM projects enabled during the build."
-)
-arg_parser.add_argument(
-    "-ccxx", "--build-libcxx",
-    action="store_true",
-    help="Enable libc and libcxx projects"
 )
 
 # Build options
@@ -110,9 +100,9 @@ arg_parser.add_argument(
     help="Disable CCache build cache."
 )
 arg_parser.add_argument(
-    "-edm", "--enable-debug-messages",
+    "-ddm", "--disable-debug-messages",
     action="store_true",
-    help="Enable detailed libomptarget debug messages."
+    help="Disable detailed libomptarget debug messages."
 )
 arg_parser.add_argument(
     "-g", "--generator",
@@ -122,7 +112,7 @@ arg_parser.add_argument(
          "used by default."
 )
 arg_parser.add_argument(
-    "-bs", "--environment-compiler",
+    "-uec", "--use-environment-compiler",
     action="store_true",
     help="Use local compilers provided by CC and CXX environment variables " +
          "instead of clang."
@@ -141,6 +131,11 @@ arg_parser.add_argument(
     help="Disable the script build stage."
 )
 arg_parser.add_argument(
+    "-di", "--disable-install",
+    action="store_true",
+    help="Disable the script install stage."
+)
+arg_parser.add_argument(
     "-dt", "--disable-tests",
     action="store_true",
     help="Disable the script test stage."
@@ -151,11 +146,6 @@ arg_parser.add_argument(
     "-po", "--print-only",
     action="store_true",
     help="Only print actions instead of executing them."
-)
-arg_parser.add_argument(
-    "-fo", "--force-overwrite",
-    action="store_true",
-    help="Overwrite previous build installs."
 )
 
 
@@ -177,10 +167,11 @@ def printFatalError(error_msg: str) -> None:
     exit(1)
 
 
-def runShellCommand(command: list, error_msg: str = "", print_only: bool = True) -> None:
-    print(f"{' '.join(command)}\n")
+def runShellCommand(command: list, error_msg: str = "", print_only: bool = True, disable_output: bool = False) -> None:
+    print(f"\n{' '.join(command)}\n")
     if not print_only:
-        returncode = subprocess.run(command).returncode
+        returncode = subprocess.run(
+            command, capture_output=disable_output).returncode
         if returncode != 0:
             printFatalError(
                 "Executed shell command failed:\n"
@@ -213,12 +204,11 @@ def main(args: argparse.Namespace) -> None:
     if not args.print_only:
         args.build_path.mkdir(parents=True, exist_ok=True)
 
-    if not args.force_overwrite and not args.disable_build:
-        if args.install_path.exists and not isDirectoryEmpty(args.install_path):
-            printFatalError(f"Install path not empty: {args.install_path}")
-
     if not args.print_only:
         args.install_path.mkdir(parents=True, exist_ok=True)
+
+    if not args.disable_install and not isDirectoryEmpty(args.install_path):
+            printWarning(f"Install path not empty: {args.install_path}")
 
     if not args.disable_ccache:
         args.ccache_path = shutil.which("ccache")
@@ -227,21 +217,18 @@ def main(args: argparse.Namespace) -> None:
                 f"CCache enabled but not installed. Building without cache.")
             args.disable_ccache = True
 
-    if not args.environment_compiler:
+    if not args.use_environment_compiler:
         args.clang_path = shutil.which("clang")
         args.clangxx_path = shutil.which("clang++")
         if args.clang_path == None or args.clangxx_path == None:
             printWarning(
                 f"Clang not found. Building with default C/C++ compilers.")
-            args.environment_compiler = True
-
-    if args.ccxx:
-        args.enable_projects.extend(libccxx_projects)
+            args.use_environment_compiler = True
 
     args.enable_projects = ";".join(set(args.enable_projects))
     args.enable_targets = ";".join(set(args.enable_targets))
 
-    args.enable_debug_messages = int(args.enable_debug_messages)
+    args.debug_messages = int(not args.disable_debug_messages)
 
     print(f"{args}\n")
 
@@ -253,14 +240,16 @@ def main(args: argparse.Namespace) -> None:
         f"-G{args.generator}",
         f"-DCMAKE_BUILD_TYPE={args.build_type}",
         f"-DCMAKE_INSTALL_PREFIX={args.install_path}",
-        f"-DLIBOMPTARGET_ENABLE_DEBUG={args.enable_debug_messages}",
         f"-DLLVM_ENABLE_PROJECTS={args.enable_projects}",
         f"-DLLVM_TARGETS_TO_BUILD={args.enable_targets}",
+        f"-DCLANG_DEFAULT_CXX_STDLIB=libc++",
         f"-DLLVM_USE_LINKER={args.linker}",
+        f"-DCLANG_VENDOR=OmpCluster",
+        f"-DLIBOMPTARGET_ENABLE_DEBUG={args.debug_messages}",
         f"-DLLVM_ENABLE_ASSERTIONS=On",
         f"-DCMAKE_CXX_FLAGS=-Wall"
     ]
-    if not args.environment_compiler:
+    if not args.use_environment_compiler:
         cmake_config_command.append(f"-DCMAKE_C_COMPILER={args.clang_path}")
         cmake_config_command.append(
             f"-DCMAKE_CXX_COMPILER={args.clangxx_path}")
@@ -273,9 +262,13 @@ def main(args: argparse.Namespace) -> None:
     cmake_build_command = [
         "cmake",
         "--build",
-        f"{args.build_path}",
-        "--target",
-        "install"
+        f"{args.build_path}"
+    ]
+
+    cmake_install_command = [
+        "cmake",
+        "--install",
+        f"{args.build_path}"
     ]
 
     test_command = [
@@ -299,6 +292,15 @@ def main(args: argparse.Namespace) -> None:
             cmake_build_command,
             "Failed to build the LLVM project",
             args.print_only
+        )
+
+    # Install
+    if not args.disable_install:
+        runShellCommand(
+            cmake_install_command,
+            "Failed to install the LLVM project",
+            args.print_only,
+            disable_output=True
         )
 
     # Test
