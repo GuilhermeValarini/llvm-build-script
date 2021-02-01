@@ -245,7 +245,6 @@ def main(args: argparse.Namespace) -> None:
         f"-DCMAKE_INSTALL_PREFIX={args.install_path}",
         f"-DLLVM_ENABLE_PROJECTS={args.enable_projects}",
         f"-DLLVM_TARGETS_TO_BUILD={args.enable_targets}",
-        f"-DCLANG_DEFAULT_CXX_STDLIB=libc++",
         f"-DLLVM_USE_LINKER={args.linker}",
         f"-DCLANG_VENDOR=OmpCluster",
         f"-DLIBOMPTARGET_ENABLE_DEBUG={args.debug_messages}",
