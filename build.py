@@ -63,16 +63,17 @@ arg_parser.add_argument(
 )
 arg_parser.add_argument(
     "build_path",
-    type=pathlib.Path,
+    type=pathlib.Path, nargs="?",
     help="Path to a directory to be used by CMake as its build path. A new " +
          "directory with the build type will be created inside the provided " +
-         "path."
+         "path. If none is provided, defaults to " +
+         "$PWD/builds/<source_path_last_dir>/<build-type>"
 )
 arg_parser.add_argument(
     "install_path",
     type=pathlib.Path, nargs="?",
     help="Path to a destination directory to install the binaries. If none " +
-         "is provided, defaults to $PWD/installs/git-branch-name/build-type"
+         "is provided, defaults to $PWD/installs/<git-branch-name>/<build-type>"
 )
 
 # LLVM options
@@ -191,11 +192,13 @@ def main(args: argparse.Namespace) -> None:
             args.source_path).active_branch.name.replace("/", "-")
         args.install_path = current_path/"installs"/branch_name/args.build_type.lower()
 
+    if args.build_path == None:
+        args.build_path = current_path/"builds"/args.source_path.name.lower()
+    args.build_path /= args.build_type.lower()
+
     args.source_path /= "llvm"
     if not args.source_path.exists():
         printFatalError(f"Source path does not exists: {args.source_path}")
-
-    args.build_path /= args.build_type.lower()
 
     if args.build_path.exists() and not isDirectoryEmpty(args.build_path):
         printWarning("Build path not empty and CMake build cache may be "
@@ -208,7 +211,7 @@ def main(args: argparse.Namespace) -> None:
         args.install_path.mkdir(parents=True, exist_ok=True)
 
     if not args.disable_install and not isDirectoryEmpty(args.install_path):
-            printWarning(f"Install path not empty: {args.install_path}")
+        printWarning(f"Install path not empty: {args.install_path}")
 
     if not args.disable_ccache:
         args.ccache_path = shutil.which("ccache")
