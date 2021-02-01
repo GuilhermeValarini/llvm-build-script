@@ -296,7 +296,7 @@ def main(args: argparse.Namespace) -> None:
         )
 
     # Install
-    if not args.disable_install:
+    if not args.disable_install and not args.disable_build:
         runShellCommand(
             cmake_install_command,
             "Failed to install the LLVM project",
@@ -305,7 +305,7 @@ def main(args: argparse.Namespace) -> None:
         )
 
     # Test
-    if not args.disable_tests:
+    if not args.disable_tests and not args.disable_build:
         runShellCommand(
             test_command,
             "Failed to successfully test the LLVM project failed",
