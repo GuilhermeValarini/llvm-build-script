@@ -247,7 +247,8 @@ def main(args: argparse.Namespace) -> None:
         f"-DCLANG_VENDOR=OmpCluster",
         f"-DLIBOMPTARGET_ENABLE_DEBUG={args.debug_messages}",
         f"-DLLVM_ENABLE_ASSERTIONS=On",
-        f"-DCMAKE_CXX_FLAGS=-Wall"
+        f"-DCMAKE_CXX_FLAGS=-Wall",
+        f"-DCMAKE_EXPORT_COMPILE_COMMANDS=On",
     ]
     if not args.use_environment_compiler:
         cmake_config_command.append(f"-DCMAKE_C_COMPILER={args.clang_path}")
