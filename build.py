@@ -187,6 +187,9 @@ def isDirectoryEmpty(path: str) -> bool:
 
 def main(args: argparse.Namespace) -> None:
     # Preprocess arguments and create temporary and output directories
+    if not args.source_path.exists():
+        printFatalError(f"Source path does not exists: {args.source_path}")
+
     if args.install_path == None:
         branch_name = git.Repo(
             args.source_path).active_branch.name.replace("/", "-")
