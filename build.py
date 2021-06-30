@@ -106,6 +106,11 @@ arg_parser.add_argument(
     help="Disable detailed libomptarget debug messages."
 )
 arg_parser.add_argument(
+    "-dp", "--disable-profiler",
+    action="store_true",
+    help="Disable detailed libomptarget debug messages."
+)
+arg_parser.add_argument(
     "-g", "--generator",
     type=str, choices=cmake_generators,
     default="Ninja" if shutil.which("ninja") != None else "Unix Makefiles",
@@ -123,6 +128,12 @@ arg_parser.add_argument(
     type=str, choices=linker_option, default="lld",
     help="Linker to be used during the LLVM compilation. " +
          "Default: system default linker."
+)
+arg_parser.add_argument(
+    "-j", "--jobs",
+    type=int, default=int(os.cpu_count() * .80),
+    help="Number of threads to use during the build process. Defaults to " +
+         "80%% of the available threads."
 )
 
 # Script stages options
@@ -168,7 +179,8 @@ def printFatalError(error_msg: str) -> None:
     exit(1)
 
 
-def runShellCommand(command: list, error_msg: str = "", print_only: bool = True, disable_output: bool = False) -> None:
+def runShellCommand(command: list, error_msg: str = "", print_only: bool = True,
+                    disable_output: bool = False) -> None:
     print(f"\n{' '.join(command)}\n")
     if not print_only:
         returncode = subprocess.run(
@@ -234,7 +246,10 @@ def main(args: argparse.Namespace) -> None:
     args.enable_projects = ";".join(set(args.enable_projects))
     args.enable_targets = ";".join(set(args.enable_targets))
 
+    args.openmp_standalone = int("openmp" in args.enable_projects and
+                                 "clang" not in args.enable_projects)
     args.debug_messages = int(not args.disable_debug_messages)
+    args.profiler = int(not args.disable_profiler)
 
     print(f"{args}\n")
 
@@ -252,8 +267,10 @@ def main(args: argparse.Namespace) -> None:
         f"-DCLANG_VENDOR=OmpCluster",
         f"-DLIBOMPTARGET_ENABLE_DEBUG={args.debug_messages}",
         f"-DLLVM_ENABLE_ASSERTIONS=On",
-        f"-DCMAKE_CXX_FLAGS=-Wall",
         f"-DCMAKE_EXPORT_COMPILE_COMMANDS=On",
+        f"-DLLVM_INCLUDE_BENCHMARKS=Off",
+        f"-DLIBOMPTARGET_ENABLE_PROFILER={args.profiler}",
+        f"-DOPENMP_STANDALONE_BUILD={args.openmp_standalone}",
     ]
     if not args.use_environment_compiler:
         cmake_config_command.append(f"-DCMAKE_C_COMPILER={args.clang_path}")
@@ -264,11 +281,17 @@ def main(args: argparse.Namespace) -> None:
     if args.build_type == "Debug":
         cmake_config_command.append("-DBUILD_SHARED_LIBS=1")
         cmake_config_command.append("-DLLVM_USE_SPLIT_DWARF=1")
+    if "NVPTX" in args.enable_targets:
+        cmake_config_command.append("-DCLANG_OPENMP_NVPTX_DEFAULT_ARCH=sm_61")
+        cmake_config_command.append(
+            "-DLIBOMPTARGET_NVPTX_COMPUTE_CAPABILITIES=61")
 
     cmake_build_command = [
         "cmake",
         "--build",
-        f"{args.build_path}"
+        f"{args.build_path}",
+        "-j",
+        f"{args.jobs}"
     ]
 
     cmake_install_command = [
