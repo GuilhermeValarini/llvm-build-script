@@ -13,7 +13,7 @@ execution_datetime = datetime.datetime.now().strftime("%Y-%m-%d-T%H%M%S")
 
 # Command line options choices
 build_type_options = ["Release", "Debug", ]
-linker_option = ["lld", "gold", ]
+linker_option = ["lld", "gold", "ld", ]
 cmake_generators = ["Ninja", "Unix Makefiles", ]
 llvm_projects = [
     "clang",
@@ -197,7 +197,7 @@ def isDirectoryEmpty(path: str) -> bool:
     return not pathlib.Path(path).exists() or len(os.listdir(path)) == 0
 
 
-def main(args: argparse.Namespace) -> None:
+def build(args: argparse.Namespace) -> None:
     # Preprocess arguments and create temporary and output directories
     if not args.source_path.exists():
         printFatalError(f"Source path does not exists: {args.source_path}")
@@ -263,7 +263,6 @@ def main(args: argparse.Namespace) -> None:
         f"-DCMAKE_INSTALL_PREFIX={args.install_path}",
         f"-DLLVM_ENABLE_PROJECTS={args.enable_projects}",
         f"-DLLVM_TARGETS_TO_BUILD={args.enable_targets}",
-        f"-DLLVM_USE_LINKER={args.linker}",
         f"-DCLANG_VENDOR=OmpCluster",
         f"-DLIBOMPTARGET_ENABLE_DEBUG={args.debug_messages}",
         f"-DLLVM_ENABLE_ASSERTIONS=On",
@@ -274,8 +273,8 @@ def main(args: argparse.Namespace) -> None:
     ]
     if not args.use_environment_compiler:
         cmake_config_command.append(f"-DCMAKE_C_COMPILER={args.clang_path}")
-        cmake_config_command.append(
-            f"-DCMAKE_CXX_COMPILER={args.clangxx_path}")
+        cmake_config_command.append(f"-DCMAKE_CXX_COMPILER={args.clangxx_path}")
+        cmake_config_command.append(f"-DLLVM_USE_LINKER={args.linker}")
     if not args.disable_ccache:
         cmake_config_command.append(f"-DLLVM_CCACHE_BUILD=ON")
     if args.build_type == "Debug":
@@ -340,7 +339,9 @@ def main(args: argparse.Namespace) -> None:
             args.print_only
         )
 
+def main() -> None:
+    args = arg_parser.parse_args()
+    build(args)
 
 if __name__ == "__main__":
-    args = arg_parser.parse_args()
-    main(args)
+    main()
