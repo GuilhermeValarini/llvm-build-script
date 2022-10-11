@@ -309,8 +309,8 @@ def config(
         cmake_config_command.append("-DBUILD_SHARED_LIBS=1")
         cmake_config_command.append("-DLLVM_USE_SPLIT_DWARF=1")
     if "NVPTX" in enable_targets:
-        cmake_config_command.append("-DCLANG_OPENMP_NVPTX_DEFAULT_ARCH=sm_61")
-        cmake_config_command.append("-DLIBOMPTARGET_NVPTX_COMPUTE_CAPABILITIES=61")
+        cmake_config_command.append("-DCLANG_OPENMP_NVPTX_DEFAULT_ARCH=sm_86")
+        cmake_config_command.append("-DLIBOMPTARGET_NVPTX_COMPUTE_CAPABILITIES=86")
 
     runShellCommand(
         cmake_config_command,
