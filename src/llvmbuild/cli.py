@@ -27,22 +27,30 @@ cmake_generators = [
     "Unix Makefiles",
 ]
 llvm_projects = [
+    "bolt",
     "clang",
     "clang-tools-extra",
     "compiler-rt",
-    "debuginfo-tests",
+    "cross-project-tests",
+    "flang",
     "libc",
     "libclc",
-    "libcxx",
-    "libcxxabi",
-    "libunwind",
     "lld",
     "lldb",
-    "llgo",
+    "mlir",
     "openmp",
-    "parallel-libs",
     "polly",
     "pstl",
+]
+llvm_runtimes = [
+    "libc",
+    "libunwind",
+    "libcxxabi",
+    "pstl",
+    "libcxx",
+    "compiler-rt",
+    "openmp",
+    "llvm-libgcc",
 ]
 llvm_targets = [
     "AArch64",
@@ -191,15 +199,23 @@ def cli(
     "--enable-projects",
     "-ep",
     type=click.Choice(llvm_projects),
-    default=["clang", "openmp", "libcxx", "libcxxabi"],
+    default=["clang"],
     multiple=True,
     help="list of enabled LLVM projects",
+)
+@click.option(
+    "--enable-runtimes",
+    "-er",
+    type=click.Choice(llvm_runtimes),
+    default=["openmp", "libcxx", "libcxxabi"],
+    multiple=True,
+    help="list of enabled LLVM runtimes",
 )
 @click.option(
     "--enable-targets",
     "-et",
     type=click.Choice(llvm_targets),
-    default=["X86"],
+    default=["X86", "NVPTX"],
     multiple=True,
     help="list of enabled LLVM targets",
 )
@@ -230,6 +246,7 @@ def config(
     disable_ccache: bool,
     use_env_compiler: bool,
     enable_projects: list[str],
+    enable_runtimes: list[str],
     enable_targets: list[str],
     disable_debug_messages: bool,
     disable_profiler: bool,
@@ -262,8 +279,19 @@ def config(
         printWarning(f"Clang not found. Building with default C/C++ compilers.")
         use_env_compiler = True
 
-    # Get enabled projects
-    enable_projects: str = ";".join(set(enable_projects))
+    # Get enabled projects and runtimes
+    enable_projects: set = set(enable_projects)
+    enable_runtimes: set = set(enable_runtimes)
+
+    if not enable_projects.isdisjoint(enable_runtimes):
+        printFatalError(
+            f"Enabled projects ({enable_projects}) and enabled runtimes({enable_runtimes}) "
+            f"list should be disjoint. Prefer placing {enable_projects & enable_runtimes} "
+            "only in the runtimes list."
+        )
+
+    enable_projects: str = ";".join(enable_projects)
+    enable_runtimes: str = ";".join(enable_runtimes)
     enable_targets: str = ";".join(set(enable_targets))
     openmp_standalone: int = int(
         "openmp" in enable_projects and "clang" not in enable_projects
@@ -277,6 +305,7 @@ def config(
     print(f"- disable_ccache: {disable_ccache}")
     print(f"- use_env_compiler: {use_env_compiler}")
     print(f"- enable_projects: {enable_projects}")
+    print(f"- enable_runtimes: {enable_runtimes}")
     print(f"- enable_targets: {enable_targets}")
     print(f"- disable_debug_messages: {disable_debug_messages}")
     print(f"- disable_profiler: {disable_profiler}")
@@ -290,6 +319,7 @@ def config(
         f"-DCMAKE_BUILD_TYPE={ctx.obj.build_type}",
         f"-DCMAKE_INSTALL_PREFIX={ctx.obj.install}",
         f"-DLLVM_ENABLE_PROJECTS={enable_projects}",
+        f"-DLLVM_ENABLE_RUNTIMES={enable_runtimes}",
         f"-DLLVM_TARGETS_TO_BUILD={enable_targets}",
         f"-DCLANG_VENDOR=OmpCluster",
         f"-DLIBOMPTARGET_ENABLE_DEBUG={debug_messages}",
